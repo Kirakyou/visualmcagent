@@ -1,0 +1,63 @@
+name: 一键云端编译并签名 VisualAgent APK (适配小米 HyperOS 3)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-signed-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. 检出源码
+        uses: actions/checkout@v4
+
+      - name: 2. 配置 JDK 17 环境
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 3. 配置 Gradle 构建环境
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.9'
+
+      - name: 4. 编译未签名 Release APK 并执行 zipalign + V2/V3 强签名
+        run: |
+          gradle assembleRelease --no-daemon
+          
+          BUILD_TOOLS_DIR=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -n 1)
+          ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          
+          keytool -genkeypair -v \
+            -keystore visualagent.jks \
+            -alias visualagent_key \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass visualagent123456 -keypass visualagent123456 \
+            -dname "CN=VisualAgent, OU=MobileAI, O=OpenSource, L=Beijing, ST=Beijing, C=CN"
+          
+          UNSIGNED_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
+          ALIGNED_APK="app/build/outputs/apk/release/app-aligned.apk"
+          FINAL_APK="VisualAgent-HyperOS3-Signed.apk"
+          
+          "$ZIPALIGN" -p -f -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
+          "$APKSIGNER" sign \
+            --ks visualagent.jks \
+            --ks-key-alias visualagent_key \
+            --ks-pass pass:visualagent123456 \
+            --key-pass pass:visualagent123456 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out "$FINAL_APK" \
+            "$ALIGNED_APK"
+          
+          "$APKSIGNER" verify --verbose "$FINAL_APK"
+
+      - name: 5. 上传可直接安装的 APK 安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: VisualAgent-HyperOS3-APK
+          path: VisualAgent-HyperOS3-Signed.apk
