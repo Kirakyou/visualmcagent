@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">VisualAgent</string>
+    <string name="accessibility_service_description">VisualAgent 辅助感知通道：用于在 Shizuku 未激活时提供降级手势注入 (dispatchGesture)、辅助提取前台窗口 UI 树，以及承载系统级 Minecraft 像素悬浮球。</string>
+</resources>
